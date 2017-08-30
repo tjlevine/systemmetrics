@@ -61,8 +61,6 @@ public class StatsCollector {
 
     private static final Logger LOG = LoggerFactory.getLogger(StatsCollector.class);
 
-    private static Map<String, Long> lastRequestTimes = new HashMap<>();
-
     private static String generateTSDRKey(final GetStatsInput request) {
         return TsdrKeyFactory.createEncodedTsdrKey(
                 request.getNodeId(),
@@ -78,11 +76,13 @@ public class StatsCollector {
 
     private static GetStatsOutput jsonToStatsOutput(final InputStream jsonData) {
         final JsonReader reader = Json.createReader(jsonData);
-
-        final JsonObject tsdrOutput = reader.readObject();
-        final JsonArray metricRecords = tsdrOutput.getJsonArray("metricRecords");
+        final JsonObject outObj = reader.readObject();
+        final JsonArray results = outObj.getJsonArray("results");
+        final JsonObject result = (JsonObject)results.get(0);
+        final JsonArray series = result.getJsonArray("series");
+        final JsonObject seriesobj = (JsonObject)series.get(0);
+        final JsonArray metricRecords = seriesobj.getJsonArray("values");
         reader.close();
-
         return buildStatsOutput(metricRecords);
     }
 
@@ -103,13 +103,13 @@ public class StatsCollector {
         final List<DataPoints> dataPoints = new ArrayList<>();
 
         for (int i = 0; i < metricRecords.size(); i++) {
-            final JsonObject firstMetric = metricRecords.getJsonObject(i);
-
-            final String metricName = firstMetric.getString("metricName");
-            final String metricValue = firstMetric.getJsonNumber("metricValue").toString();
-            final String timeStamp = firstMetric.getString("timeStamp");
-            final String nodeId = firstMetric.getString("nodeID");
-            final String tsdrDC = firstMetric.getString("tsdrDataCategory");
+            final JsonArray firstMetric = (JsonArray) metricRecords.get(i);
+            final String metricName = (String) firstMetric.getString(1);
+            final String metricValue = String.valueOf(firstMetric.get(2));
+            final String timeStamp = (String) firstMetric.getString(0);
+            final String nodeId = (String) firstMetric.getString(3);
+            /* TODO: Can we remove tsdrDC ??*/
+            final String tsdrDC = "tsdr";
 
             dataPoints.add(buildDataPoint(metricName, metricValue, tsdrDC, timeStamp, nodeId));
         }
@@ -124,45 +124,7 @@ public class StatsCollector {
     }
 
     public static GetStatsOutput collectForRequest(final GetStatsInput request) throws IOException {
-
-        final String tsdrKey = generateTSDRKey(request);
-        final String lastRequestKey = String.valueOf(request.getClusterMember().getValue()) + tsdrKey;
-
-        final Long lastRequestTime = lastRequestTimes.getOrDefault(lastRequestKey, 0L);
-
-        LOG.info("last request time for key {} is {}", lastRequestKey, lastRequestTime);
-
-        lastRequestTimes.put(lastRequestKey, System.currentTimeMillis() / 1000);
-
-        if (lastRequestTime == 0L) {
-            LOG.info("No previous request for this ip + tsdr key, returning empty output");
-            // never made this request before, just return empty result
-            // the alternative is to return the first 1000 records since TSDR started.
-
-            /*
-             *  TSDR works in a strange way:
-             *  Imagine this is the set of records that TSDR has generated, with the first generated record on the left
-             *  and progressively newer records as you go right, with the most recent record on the right end
-             *
-             *  [----------- TSDR record set ----------------]
-             *  |  first 1000 records    |
-             *
-             *  If you don't specify a value for the "from" query string parameter, the same set of 1000 TSDR records
-             *  will always be returned to you (this is the first 1000 records that TSDR has generated). You will never
-             *  see any new records after the first 1000 if you don't correctly use the "from" parameter.
-             *
-             *  To avoid this strange behavior, stats reflector simply remembers the last time it make a request for a
-             *  given TSDR key, and uses that time value as the "from" query string parameter in the next call to TSDR.
-             *  In the case of the first request, we just return an empty RPC output. The alternative is to return the
-             *  first 1000 records which TSDR generated, which are probably old and useless.
-             *
-             */
-
-
-            return buildEmptyStatsOutput();
-        }
-
-        final String requestURL = RestUrlFactory.getTsdrUrl(request.getClusterMember(), tsdrKey, lastRequestTime);
+        final String requestURL = RestUrlFactory.getInfluxUrl();
 
         LOG.info("Making stats request to URL: {}", requestURL);
 
@@ -270,7 +232,7 @@ public class StatsCollector {
 
     private static void checkStatus(String status) throws IOException {
         if (!(status.equals("operational") || status.equals("config"))) {
-            throw new IOException(String.format("Status must be operational or config, got %s instead.", status));
+            throw new IOException("Status must be operational or config");
         }
     }
 
@@ -348,6 +310,7 @@ public class StatsCollector {
                 .setPendingTxCommitQueueSize(value.getInt("PendingTxCommitQueueSize"))
                 .setCommitIndex(value.getInt("CommitIndex"))
                 .setRaftState(value.getString("RaftState"));
+
         if (value.getString("RaftState").equals("Follower")) {
             return outputBuilder.build();
         }
@@ -355,7 +318,6 @@ public class StatsCollector {
         else {
             JsonArray followerInfoArray = value.getJsonArray("FollowerInfo");
             List<FollowerInfo> followerInfoList = generateFollowerInfoList(followerInfoArray);
-
             return outputBuilder
                     .setFollowerInfo(followerInfoList)
                     .build();

@@ -120,7 +120,7 @@ public class ControllerMetricCollector extends Thread {
         BigDecimal value = new BigDecimal(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
         logger.debug("Inserting memory sample value");
         logger.debug(value.toString());
-        this.influxDB.write("Controller,metricName=Heap:Memory:Usage metricValue="+value.toString());
+        this.influxDB.write("systemmetric,nodeId=Controller,metricName=Heap:Memory:Usage metricValue="+value.toString());
     }
 
     protected void insertControllerCPUSample() {
@@ -132,7 +132,7 @@ public class ControllerMetricCollector extends Thread {
         BigDecimal value = new BigDecimal(cpuValue.get());
         logger.debug("Inserting controller cpu value");
         logger.debug(value.toString());
-        this.influxDB.write("Controller,metricName=CPU:Usage metricValue="+value.toString());
+        this.influxDB.write("systemmetric,nodeId=Controller,metricName=CPU:Usage metricValue="+value.toString());
     }
 
     protected void insertMachineCPUSample() {
@@ -144,6 +144,6 @@ public class ControllerMetricCollector extends Thread {
         BigDecimal value  = new BigDecimal(cpuValue.get());
         logger.debug("Inserting machine cpu value");
         logger.debug(value.toString());
-        this.influxDB.write("Machine,metricName=CPU:Usage metricValue="+value.toString());
+        this.influxDB.write("systemmetric,nodeId=Machine,metricName=CPU:Usage metricValue="+value.toString());
     }
 }

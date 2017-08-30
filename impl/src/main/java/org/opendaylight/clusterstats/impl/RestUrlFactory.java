@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory;
 
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.inet.types.rev130715.IpAddress;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import javax.annotation.Nonnull;
 
 /**
@@ -24,6 +26,10 @@ public class RestUrlFactory {
     private static final Logger LOG = LoggerFactory.getLogger(RestUrlFactory.class);
 
     private static final String CLUSTER_MEMBER_IP = "localhost";
+    private static final String INFLUX_IP = "localhost";
+    private static final String INFLUXDB_NAME = "datacollector";
+    private static final String INFLUX_MEASUREMENT_NAME = "systemmetric";
+    private static final String INFLUX_QUERY = "select * from %s";
 
     private static final String TSDR_URL_FORMAT = "http://%s:8181/tsdr/metrics/query?%s";
     private static final String TSDR_QUERY_FORMAT = "tsdrkey=%s&from=%s";
@@ -40,7 +46,26 @@ public class RestUrlFactory {
     private static final String SHARD_URL_FORMAT = "http://%s:8181/jolokia/read/org.opendaylight.controller:" +
             "Category=Shards,name=%s,type=%s";
 
+    private static final String INFLUX_URL_FORMAT = "http://%s:8086/query?db=%s&q=%s";
     private RestUrlFactory() {}
+
+
+    /**
+     * Generate a URL for INFLUX DB query endpoing.
+     *
+     * This URL can be used to get any type of data from influx db
+     * @return A well-formed URL suitable for making HTTP requests to db to get the query output in json format
+     */
+    @Nonnull
+    public static String getInfluxUrl() {
+        try {
+            final String queryString = String.format(INFLUX_QUERY, INFLUX_MEASUREMENT_NAME);
+            return String.format(INFLUX_URL_FORMAT, INFLUX_IP, INFLUXDB_NAME, URLEncoder.encode(queryString, "UTF-8"));
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
 
     /**
      * Generate a URL for a TSDR REST endpoint.
