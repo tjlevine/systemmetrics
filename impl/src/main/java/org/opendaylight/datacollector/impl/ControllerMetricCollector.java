@@ -8,8 +8,6 @@
 
 package org.opendaylight.datacollector.impl;
 
-import com.google.common.base.Preconditions;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,34 +26,24 @@ public class ControllerMetricCollector extends Thread {
 
     private static final Logger logger = LoggerFactory.getLogger(ControllerMetricCollector.class);
 
-    private final class InfluxDbCredentials {
-        final String url, username, password;
-
-        public InfluxDbCredentials(final String url, final String username, final String password) {
-            this.url = Preconditions.checkNotNull(url);
-            this.username = Preconditions.checkNotNull(username);
-            this.password = Preconditions.checkNotNull(password);
-        }
-    }
-
     private CpuDataCollector cpuDataCollector;
     private InfluxDB influxDB;
     private String dbName;
     private String rp;
 
-    // these should be credentials should be read from somewhere so that it's configurable at runtime. environment variable maybe?
-    private final InfluxDbCredentials creds = new InfluxDbCredentials("http://localhost:8086", "root", "root");
 
     private void setupInflux() throws RuntimeException {
+        final InfluxDbCredentials creds = InfluxDbCredentials.fromEnvironment();
         // setup influx connection
-        this.influxDB = InfluxDBFactory.connect(creds.url, creds.username, creds.password);
+        logger.debug("Connecting to influxdb at " + creds.url());
+        this.influxDB = InfluxDBFactory.connect(creds.url(), creds.user, creds.password);
 
         // test influx connectivity
         try {
             this.influxDB.ping();
         } catch (final InfluxDBIOException e) {
-            logger.error("Cannot connect to influx db server at " + creds.url);
-            throw new RuntimeException("Cannot connect to influx db server at " + creds.url);
+            logger.error("Cannot connect to influx db server at " + creds.url());
+            throw new RuntimeException("Cannot connect to influx db server at " + creds.url());
         }
 
         this.dbName = "datacollector";
